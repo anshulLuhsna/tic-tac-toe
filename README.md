@@ -2,7 +2,13 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
-First, run the development server:
+First, set up your ElevenLabs API key:
+
+1. Sign up at [ElevenLabs](https://elevenlabs.io/) and get your API key from the profile settings.
+2. Create a `.env.local` file in the root of your project (or edit if already created).
+3. Add your API key: `ELEVENLABS_API_KEY=your_api_key_here`
+
+Then, run the development server:
 
 ```bash
 npm run dev
@@ -19,6 +25,19 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+
+## Features
+
+### Tic-Tac-Toe Game with Voice Interaction
+
+This application demonstrates:
+- A playable Tic-Tac-Toe game with voice controls using ElevenLabs conversation API
+- Text-to-speech announcements for game results
+- Conversational AI interactions
+
+### Text-to-Speech with ElevenLabs
+
+After each game ends, the application uses ElevenLabs TTS to announce the result with a custom message based on whether you won, lost, or tied.
 
 ## Learn More
 

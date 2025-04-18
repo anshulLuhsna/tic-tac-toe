@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState, useEffect } from 'react';
 import { useConversation } from '@11labs/react';
 
 // Simple TicTacToe engine with Minimax
@@ -84,6 +84,9 @@ export function Conversation() {
   const [status, setStatus] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [userName, setUserName] = useState('');
+  const [ttsMessage, setTtsMessage] = useState('');
+  const [isPlayingTts, setIsPlayingTts] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const gameRef = useRef(new TicTacToe());
 
   const conversation = useConversation({
@@ -92,6 +95,46 @@ export function Conversation() {
     onMessage: (message) => console.log('Message:', message),
     onError: (error) => console.error('Error:', error),
   });
+
+  useEffect(() => {
+    // Create audio element for TTS playback
+    if (!audioRef.current) {
+      audioRef.current = new Audio();
+      audioRef.current.onended = () => setIsPlayingTts(false);
+    }
+  }, []);
+
+  // Generate and play TTS message
+  const playTtsMessage = async (message: string) => {
+    try {
+      setIsPlayingTts(true);
+      setTtsMessage(message);
+      
+      // Call the ElevenLabs API to generate TTS
+      const response = await fetch('/api/text-to-speech', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text: message }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate speech');
+      }
+      
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      
+      if (audioRef.current) {
+        audioRef.current.src = audioUrl;
+        audioRef.current.play();
+      }
+    } catch (error) {
+      console.error('Error generating TTS:', error);
+      setIsPlayingTts(false);
+    }
+  };
 
   const clientTools = {
     makeMove: async ({ position }: { position: string }) => {
@@ -113,8 +156,26 @@ export function Conversation() {
       let winner = game.winner();
       if (winner) {
         console.log(`[makeMove] Game ended after player move. Result: ${winner}`);
-        setStatus(winner === 'Tie' ? 'Tie game!' : `${winner} wins!`);
+        const endMessage = winner === 'Tie' ? 'Tie game!' : `${winner === 'X' ? 'You' : 'I'} win!`;
+        setStatus(endMessage);
         setBoard([...game.board]);
+        
+        // Stop the conversation and play TTS message
+        await conversation.endSession();
+        
+        // Generate appropriate message based on game result
+        let ttsText = "";
+        if (winner === 'Tie') {
+          ttsText = "It's a tie game! Well played, would you like to play again?";
+        } else if (winner === 'X') {
+          ttsText = `Congratulations ${userName}, you win! You're really good at this game!`;
+        } else {
+          ttsText = "I win this round! Better luck next time!";
+        }
+        
+        // Play the TTS message
+        await playTtsMessage(ttsText);
+        
         return { isValidMove: true, board: [...game.board], winner };
       }
 
@@ -139,7 +200,24 @@ export function Conversation() {
 
       if (postWinner) {
         console.log(`[makeMove] Game ended after AI move. Result: ${postWinner}`);
-        setStatus(postWinner === 'Tie' ? 'Tie game!' : `${postWinner} wins!`);
+        const endMessage = postWinner === 'Tie' ? 'Tie game!' : `${postWinner === 'X' ? 'You' : 'I'} win!`;
+        setStatus(endMessage);
+        
+        // Stop the conversation and play TTS message
+        await conversation.endSession();
+        
+        // Generate appropriate message based on game result
+        let ttsText = "";
+        if (postWinner === 'Tie') {
+          ttsText = "It's a tie game! Well played, would you like to play again?";
+        } else if (postWinner === 'X') {
+          ttsText = `Congratulations ${userName}, you win! You're really good at this game!`;
+        } else {
+          ttsText = "I win this round! Better luck next time!";
+        }
+        
+        // Play the TTS message
+        await playTtsMessage(ttsText);
       }
 
       return { isValidMove: true, board: [...game.board], winner: postWinner || null };
@@ -203,12 +281,19 @@ export function Conversation() {
           </div>
         ))}
       </div>
-      <p>{status || `Your turn, say a move (1–9).`}</p>
+      <p className="text-black font-medium">{status || `Your turn, say a move (1–9).`}</p>
+
+      {isPlayingTts && (
+        <div className="mt-2 p-2 bg-blue-100 rounded">
+          <p className="text-sm font-semibold">Playing message:</p>
+          <p className="text-sm italic">{ttsMessage}</p>
+        </div>
+      )}
 
       <div className="flex gap-2">
         <button
           onClick={startConversation}
-          disabled={conversation.status === 'connected'}
+          disabled={conversation.status === 'connected' || isPlayingTts}
           className="px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-300"
         >
           Start Conversation
