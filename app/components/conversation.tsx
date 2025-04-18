@@ -50,17 +50,31 @@ class TicTacToe {
     if (win === 'Tie') return { idx: -1, score: 0 };
 
     const moves: { idx: number; score: number }[] = [];
-    for (let idx of this.availableMoves()) {
+    const availableMoves = this.availableMoves();
+    
+    if (availableMoves.length === 0) {
+      return { idx: -1, score: 0 };
+    }
+
+    for (let idx of availableMoves) {
       this.board[idx] = player;
-      const { score } = this.minimax(player === 'X' ? 'O' : 'X');
-      moves.push({ idx, score });
-      this.board[idx] = ' ';
+      const result = this.minimax(player === 'X' ? 'O' : 'X');
+      moves.push({ idx, score: result.score });
+      this.board[idx] = ' '; // Undo the move
     }
 
     if (player === 'X') {
-      return moves.reduce((best, m) => (m.score > best.score ? m : best));
+      const bestMove = moves.reduce((best, move) => 
+        move.score > best.score ? move : best, 
+        { idx: -1, score: -Infinity }
+      );
+      return bestMove;
     } else {
-      return moves.reduce((best, m) => (m.score < best.score ? m : best));
+      const bestMove = moves.reduce((best, move) => 
+        move.score < best.score ? move : best, 
+        { idx: -1, score: Infinity }
+      );
+      return bestMove;
     }
   }
 }
@@ -81,27 +95,50 @@ export function Conversation() {
 
   const clientTools = {
     makeMove: async ({ position }: { position: string }) => {
+      console.log(`[makeMove] Player attempting move at position: ${position}`);
       const idx = parseInt(position, 10) - 1;
       const game = gameRef.current;
-      if (idx < 0 || idx > 8 || !game.makeMove(idx, 'X')) {
+      
+      // Validate move
+      if (idx < 0 || idx > 8 || game.board[idx] !== ' ') {
+        console.log(`[makeMove] Invalid move at position: ${position}`);
         return { isValidMove: false, board: [...game.board] };
       }
-
+      
+      // Make player's move
+      game.makeMove(idx, 'X');
+      console.log(`[makeMove] Player made move at position: ${position}, board: ${game.board.join('')}`);
+      
       // Check for player win/tie
       let winner = game.winner();
       if (winner) {
+        console.log(`[makeMove] Game ended after player move. Result: ${winner}`);
         setStatus(winner === 'Tie' ? 'Tie game!' : `${winner} wins!`);
         setBoard([...game.board]);
         return { isValidMove: true, board: [...game.board], winner };
       }
 
       // AI move
-      const { idx: aiIdx } = game.minimax('O');
-      game.makeMove(aiIdx, 'O');
-      const postWinner = game.winner();
-
+      console.log(`[makeMove] AI calculating move...`);
+      const availableMoves = game.availableMoves();
+      if (availableMoves.length > 0) {
+        const { idx: aiIdx } = game.minimax('O');
+        if (aiIdx >= 0 && aiIdx < 9 && game.board[aiIdx] === ' ') {
+          game.makeMove(aiIdx, 'O');
+          console.log(`[makeMove] AI made move at position: ${aiIdx + 1}`);
+        } else {
+          console.log(`[makeMove] AI attempted invalid move: ${aiIdx}`);
+        }
+      }
+      
+      // Final state after both moves
       setBoard([...game.board]);
+      
+      const postWinner = game.winner();
+      console.log(`[makeMove] Board state after moves: ${game.board.join('')}`);
+
       if (postWinner) {
+        console.log(`[makeMove] Game ended after AI move. Result: ${postWinner}`);
         setStatus(postWinner === 'Tie' ? 'Tie game!' : `${postWinner} wins!`);
       }
 
@@ -110,17 +147,22 @@ export function Conversation() {
   };
 
   const startConversation = useCallback(async () => {
+    
     if (!userName) {
+      
       setShowModal(true);
       return;
     }
 
+   
     gameRef.current = new TicTacToe();
     setBoard(Array(9).fill(' '));
     setStatus('');
 
     try {
+     
       await navigator.mediaDevices.getUserMedia({ audio: true });
+     
       await conversation.startSession({
         agentId: 'EK03TEdzmpWUfU0TZdC9',
         clientTools: {
@@ -132,7 +174,7 @@ export function Conversation() {
         dynamicVariables: { user_name: userName },
       });
     } catch (err) {
-      console.error('Failed to start:', err);
+      console.error('[startConversation] Failed to start:', err);
     }
   }, [conversation, userName]);
 
@@ -141,6 +183,7 @@ export function Conversation() {
       setShowModal(false);
       // Start conversation now that we have the user name
       startConversation();
+    } else {
     }
   }, [userName, startConversation]);
 
