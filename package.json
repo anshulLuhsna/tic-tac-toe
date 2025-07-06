@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@11labs/react": "^0.1.3",
+    "@elevenlabs/react": "^0.2.1",
     "elevenlabs": "^1.56.1",
     "next": "15.2.4",
     "react": "^19.0.0",

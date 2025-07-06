@@ -1,342 +1,243 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 'use client';
 
-import React, { useCallback, useRef, useState, useEffect } from 'react';
-import { useConversation } from '@11labs/react';
+import React, {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  MutableRefObject,
+} from 'react';
+import { useConversation } from '@elevenlabs/react';
 
-// Simple TicTacToe engine with Minimax
+/* ───────────────────── Tic-Tac-Toe engine ───────────────────── */
 class TicTacToe {
-  public board: string[];
+  board: string[];
 
   constructor() {
     this.board = Array(9).fill(' ');
   }
-
-  availableMoves(): number[] {
+  availableMoves() {
     return this.board
-      .map((c: string, i: number) => (c === ' ' ? i : null))
+      .map((c, i) => (c === ' ' ? i : null))
       .filter((i): i is number => i !== null);
   }
-
-  makeMove(idx: number, player: string) {
+  makeMove(idx: number, p: string) {
     if (this.board[idx] === ' ') {
-      this.board[idx] = player;
+      this.board[idx] = p;
       return true;
     }
     return false;
   }
-
   winner(): string | null {
     const wins = [
-      [0,1,2],[3,4,5],[6,7,8],
-      [0,3,6],[1,4,7],[2,5,8],
-      [0,4,8],[2,4,6]
+      [0, 1, 2], [3, 4, 5], [6, 7, 8],
+      [0, 3, 6], [1, 4, 7], [2, 5, 8],
+      [0, 4, 8], [2, 4, 6],
     ];
-    for (let [a,b,c] of wins) {
+    for (const [a, b, c] of wins) {
       if (
         this.board[a] === this.board[b] &&
         this.board[b] === this.board[c] &&
         this.board[a] !== ' '
-      ) {
+      )
         return this.board[a];
-      }
     }
     return this.board.includes(' ') ? null : 'Tie';
   }
-
   minimax(player: string): { idx: number; score: number } {
-    const win = this.winner();
-    if (win === 'X') return { idx: -1, score: 1 };
-    if (win === 'O') return { idx: -1, score: -1 };
-    if (win === 'Tie') return { idx: -1, score: 0 };
+    const res = this.winner();
+    if (res === 'X') return { idx: -1, score: 1 };
+    if (res === 'O') return { idx: -1, score: -1 };
+    if (res === 'Tie') return { idx: -1, score: 0 };
 
     const moves: { idx: number; score: number }[] = [];
-    const availableMoves = this.availableMoves();
-    
-    if (availableMoves.length === 0) {
-      return { idx: -1, score: 0 };
-    }
-
-    for (let idx of availableMoves) {
+    for (const idx of this.availableMoves()) {
       this.board[idx] = player;
-      const result = this.minimax(player === 'X' ? 'O' : 'X');
-      moves.push({ idx, score: result.score });
-      this.board[idx] = ' '; // Undo the move
+      const { score } = this.minimax(player === 'X' ? 'O' : 'X');
+      moves.push({ idx, score });
+      this.board[idx] = ' ';
     }
-
-    if (player === 'X') {
-      const bestMove = moves.reduce((best, move) => 
-        move.score > best.score ? move : best, 
-        { idx: -1, score: -Infinity }
-      );
-      return bestMove;
-    } else {
-      const bestMove = moves.reduce((best, move) => 
-        move.score < best.score ? move : best, 
-        { idx: -1, score: Infinity }
-      );
-      return bestMove;
-    }
+    return player === 'X'
+      ? moves.reduce((best, m) => (m.score > best.score ? m : best), { idx: -1, score: -Infinity })
+      : moves.reduce((best, m) => (m.score < best.score ? m : best), { idx: -1, score: Infinity });
   }
 }
 
-export function Conversation() {
-  const [board, setBoard] = useState(Array(9).fill(' '));
+/* ───────────────────── Main component ───────────────────── */
+export default function Conversation() {
+  const [board, setBoard]  = useState<string[]>(Array(9).fill(' '));
   const [status, setStatus] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [userName, setUserName] = useState('');
-  const [ttsMessage, setTtsMessage] = useState('');
   const [isPlayingTts, setIsPlayingTts] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [ttsPreview, setTtsPreview] = useState('');
+
+  const audioRef: MutableRefObject<HTMLAudioElement | null> = useRef(null);
   const gameRef = useRef(new TicTacToe());
 
   const conversation = useConversation({
-    onConnect: () => console.log('Connected'),
-    onDisconnect: () => console.log('Disconnected'),
-    onMessage: (message) => console.log('Message:', message),
-    onError: (error) => console.error('Error:', error),
+    onConnect:   () => console.log('[EL] connected'),
+    onDisconnect: () => console.log('[EL] disconnected'),
+    onMessage:   (m) => console.log('[EL] message →', m),
+    onError:     (e) => { console.error('[EL] error', e); alert('Conversation error – check console'); },
   });
 
   useEffect(() => {
-    // Create audio element for TTS playback
     if (!audioRef.current) {
       audioRef.current = new Audio();
       audioRef.current.onended = () => setIsPlayingTts(false);
     }
   }, []);
 
-  // Generate and play TTS message
-  const playTtsMessage = async (message: string) => {
+  const playTtsMessage = useCallback(async (text: string) => {
     try {
       setIsPlayingTts(true);
-      setTtsMessage(message);
-      
-      // Call the ElevenLabs API to generate TTS
-      const response = await fetch('/api/text-to-speech', {
+      setTtsPreview(text);
+      const res = await fetch('/api/tts', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ text: message }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
       });
-      
-      if (!response.ok) {
-        throw new Error('Failed to generate speech');
-      }
-      
-      const audioBlob = await response.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
-      
-      if (audioRef.current) {
-        audioRef.current.src = audioUrl;
-        audioRef.current.play();
-      }
-    } catch (error) {
-      console.error('Error generating TTS:', error);
+      if (!res.ok) throw new Error('TTS request failed');
+      audioRef.current!.src = URL.createObjectURL(await res.blob());
+      audioRef.current!.play();
+    } catch (err) {
+      console.error('TTS error', err);
       setIsPlayingTts(false);
     }
-  };
+  }, []);
 
-  const clientTools = {
-    makeMove: async ({ position }: { position: string }) => {
-      console.log(`[makeMove] Player attempting move at position: ${position}`);
-      const idx = parseInt(position, 10) - 1;
-      const game = gameRef.current;
-      
-      // Validate move
-      if (idx < 0 || idx > 8 || game.board[idx] !== ' ') {
-        console.log(`[makeMove] Invalid move at position: ${position}`);
-        return { isValidMove: false, board: [...game.board] };
+  /* ───────────── client-tool implementation ───────────── */
+  const makeMoveTool = useCallback(
+    async ({ position }: { position: string }) => {
+      const idx = Number(position) - 1;
+      const g   = gameRef.current;
+
+      /* invalid human move */
+      if (idx < 0 || idx > 8 || g.board[idx] !== ' ') {
+        return JSON.stringify({ boardStr: g.board.join(''), aiMove: null, winner: null });
       }
-      
-      // Make player's move
-      game.makeMove(idx, 'X');
-      console.log(`[makeMove] Player made move at position: ${position}, board: ${game.board.join('')}`);
-      
-      // Check for player win/tie
-      let winner = game.winner();
+
+      /* human (O) */
+      g.makeMove(idx, 'O');
+      let winner = g.winner();
+
+      /* AI (X) */
+      let aiMove: number | null = null;
+      if (!winner) {
+        const { idx: ai } = g.minimax('X');
+        if (ai !== -1) {
+          g.makeMove(ai, 'X');
+          aiMove = ai + 1;              // convert to 1-9 for LLM
+        }
+        winner = g.winner();
+      }
+
+      setBoard([...g.board]);
+
       if (winner) {
-        console.log(`[makeMove] Game ended after player move. Result: ${winner}`);
-        const endMessage = winner === 'Tie' ? 'Tie game!' : `${winner === 'X' ? 'You' : 'I'} win!`;
-        setStatus(endMessage);
-        setBoard([...game.board]);
-        
-        // Stop the conversation and play TTS message
         await conversation.endSession();
-        
-        // Generate appropriate message based on game result
-        let ttsText = "";
-        if (winner === 'Tie') {
-          ttsText = "It's a tie game! Well played, would you like to play again?";
-        } else if (winner === 'X') {
-          ttsText = `Congratulations ${userName}, you win! You're really good at this game!`;
-        } else {
-          ttsText = "I win this round! Better luck next time!";
-        }
-        
-        // Play the TTS message
-        await playTtsMessage(ttsText);
-        
-        return { isValidMove: true, board: [...game.board], winner };
+        const line =
+          winner === 'Tie'
+            ? "It's a tie! Fancy another round?"
+            : winner === 'O'
+              ? `Nice one, ${userName}! You win 🎉`
+              : 'Haha, I win! Want a rematch?';
+        setStatus(line);
+        await playTtsMessage(line);
       }
 
-      // AI move
-      console.log(`[makeMove] AI calculating move...`);
-      const availableMoves = game.availableMoves();
-      if (availableMoves.length > 0) {
-        const { idx: aiIdx } = game.minimax('O');
-        if (aiIdx >= 0 && aiIdx < 9 && game.board[aiIdx] === ' ') {
-          game.makeMove(aiIdx, 'O');
-          console.log(`[makeMove] AI made move at position: ${aiIdx + 1}`);
-        } else {
-          console.log(`[makeMove] AI attempted invalid move: ${aiIdx}`);
-        }
-      }
-      
-      // Final state after both moves
-      setBoard([...game.board]);
-      
-      const postWinner = game.winner();
-      console.log(`[makeMove] Board state after moves: ${game.board.join('')}`);
+      return JSON.stringify({
+        boardStr: g.board.join(''),
+        aiMove,
+        winner,
+      });
+    },
+    [conversation, playTtsMessage, userName],
+  );
 
-      if (postWinner) {
-        console.log(`[makeMove] Game ended after AI move. Result: ${postWinner}`);
-        const endMessage = postWinner === 'Tie' ? 'Tie game!' : `${postWinner === 'X' ? 'You' : 'I'} win!`;
-        setStatus(endMessage);
-        
-        // Stop the conversation and play TTS message
-        await conversation.endSession();
-        
-        // Generate appropriate message based on game result
-        let ttsText = "";
-        if (postWinner === 'Tie') {
-          ttsText = "It's a tie game! Well played, would you like to play again?";
-        } else if (postWinner === 'X') {
-          ttsText = `Congratulations ${userName}, you win! You're really good at this game!`;
-        } else {
-          ttsText = "I win this round! Better luck next time!";
-        }
-        
-        // Play the TTS message
-        await playTtsMessage(ttsText);
-      }
-
-      return { isValidMove: true, board: [...game.board], winner: postWinner || null };
-    }
-  };
-
+  /* ───────────── start session ───────────── */
   const startConversation = useCallback(async () => {
-    
-    if (!userName) {
-      
-      setShowModal(true);
-      return;
-    }
+    if (!userName.trim()) { setShowModal(true); return; }
 
-   
     gameRef.current = new TicTacToe();
     setBoard(Array(9).fill(' '));
     setStatus('');
 
-    try {
-     
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-     
-      await conversation.startSession({
-        agentId: 'EK03TEdzmpWUfU0TZdC9',
-        clientTools: {
-          makeMove: async ({ position }) => {
-            const result = await clientTools.makeMove({ position });
-            return result.board.join(''); // Convert board array to string
-          }
-        },
-        dynamicVariables: { user_name: userName },
-      });
-    } catch (err) {
-      console.error('[startConversation] Failed to start:', err);
-    }
-  }, [conversation, userName]);
+    await navigator.mediaDevices.getUserMedia({ audio: true });
 
-  const handleSubmitName = useCallback(() => {
-    if (userName.trim()) {
-      setShowModal(false);
-      // Start conversation now that we have the user name
-      startConversation();
-    } else {
-    }
-  }, [userName, startConversation]);
+    await conversation.startSession({
+      agentId: 'agent_01jzfshenpernakmpv8b7s2mpe',        // ← paste real ID
+      dynamicVariables: { user_name: userName },
+      clientTools: {
+        makeMove: async ({ moveRequest }: { moveRequest: { position: string } }) =>
+          makeMoveTool({ position: moveRequest.position }),
+      },
+    });
+  }, [conversation, userName, makeMoveTool]);
 
-  const stopConversation = useCallback(async () => {
-    await conversation.endSession();
-  }, [conversation]);
+  const stopConversation = useCallback(() => conversation.endSession(), [conversation]);
 
+  /* ───────────── UI ───────────── */
   return (
-    <div className="flex flex-col items-center gap-4">
+    <div className="flex flex-col items-center gap-4 py-8">
       <div className="grid grid-cols-3 gap-1">
-        {board.map((cell, i) => (
-          <div
-            key={i}
-            className="w-12 h-12 flex items-center justify-center border text-xl"
-          >
-            {cell}
+        {board.map((c, i) => (
+          <div key={i} className="w-14 h-14 flex items-center justify-center border text-2xl font-mono">
+            {c}
           </div>
         ))}
       </div>
-      <p className="text-black font-medium">{status || `Your turn, say a move (1–9).`}</p>
+
+      <p className="mt-2 font-semibold text-center">
+        {status || 'Your move, O ⬆️'}
+      </p>
 
       {isPlayingTts && (
-        <div className="mt-2 p-2 bg-blue-100 rounded">
-          <p className="text-sm font-semibold">Playing message:</p>
-          <p className="text-sm italic">{ttsMessage}</p>
-        </div>
+        <div className="px-3 py-1 bg-blue-100 rounded text-sm italic">{ttsPreview}</div>
       )}
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 mt-3">
         <button
           onClick={startConversation}
           disabled={conversation.status === 'connected' || isPlayingTts}
-          className="px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-300"
+          className="px-4 py-2 bg-blue-600 text-white rounded disabled:bg-gray-400"
         >
-          Start Conversation
+          Start
         </button>
         <button
           onClick={stopConversation}
           disabled={conversation.status !== 'connected'}
-          className="px-4 py-2 bg-red-500 text-white rounded disabled:bg-gray-300"
+          className="px-4 py-2 bg-red-600 text-white rounded disabled:bg-gray-400"
         >
-          Stop Conversation
+          Stop
         </button>
       </div>
 
-      <div>
-        <p>Status: {conversation.status}</p>
-        <p>Agent is {conversation.isSpeaking ? 'speaking' : 'listening'}</p>
-      </div>
+      <p className="text-xs text-gray-500">
+        {conversation.status} — agent is {conversation.isSpeaking ? 'speaking' : 'listening'}
+      </p>
 
-      {/* Name Input Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white text-black p-6 rounded-lg w-80">
-            <h2 className="text-xl mb-4">Enter Your Name</h2>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white text-black p-6 rounded w-80">
+            <h2 className="text-lg font-bold mb-4">Your name?</h2>
             <input
-              type="text"
               value={userName}
               onChange={(e) => setUserName(e.target.value)}
-              className="w-full p-2 border rounded mb-4"
-              placeholder="Your name"
+              onKeyDown={(e) => e.key === 'Enter' && startConversation()}
+              className="w-full border rounded px-2 py-1 mb-4"
               autoFocus
-              onKeyDown={(e) => e.key === 'Enter' && handleSubmitName()}
             />
             <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setShowModal(false)}
-                className="px-4 py-2 bg-gray-300 rounded"
-              >
+              <button onClick={() => setShowModal(false)} className="px-3 py-1 rounded bg-gray-300">
                 Cancel
               </button>
               <button
-                onClick={handleSubmitName}
-                className="px-4 py-2 bg-blue-500 text-white rounded"
+                onClick={startConversation}
                 disabled={!userName.trim()}
+                className="px-3 py-1 rounded bg-blue-600 text-white"
               >
                 Start
               </button>
