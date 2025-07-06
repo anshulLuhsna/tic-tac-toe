@@ -68,10 +68,9 @@ class TicTacToe {
 export default function Conversation() {
   const [board, setBoard]  = useState<string[]>(Array(9).fill(' '));
   const [status, setStatus] = useState('');
-  const [showModal, setShowModal] = useState(false);
-  const [userName, setUserName] = useState('');
   const [isPlayingTts, setIsPlayingTts] = useState(false);
   const [ttsPreview, setTtsPreview] = useState('');
+  const userName = 'Player'; // Default username
 
   const audioRef: MutableRefObject<HTMLAudioElement | null> = useRef(null);
   const gameRef = useRef(new TicTacToe());
@@ -159,8 +158,6 @@ export default function Conversation() {
 
   /* ───────────── start session ───────────── */
   const startConversation = useCallback(async () => {
-    if (!userName.trim()) { setShowModal(true); return; }
-
     gameRef.current = new TicTacToe();
     setBoard(Array(9).fill(' '));
     setStatus('');
@@ -218,33 +215,6 @@ export default function Conversation() {
       <p className="text-xs text-gray-500">
         {conversation.status} — agent is {conversation.isSpeaking ? 'speaking' : 'listening'}
       </p>
-
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white text-black p-6 rounded w-80">
-            <h2 className="text-lg font-bold mb-4">Your name?</h2>
-            <input
-              value={userName}
-              onChange={(e) => setUserName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && startConversation()}
-              className="w-full border rounded px-2 py-1 mb-4"
-              autoFocus
-            />
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setShowModal(false)} className="px-3 py-1 rounded bg-gray-300">
-                Cancel
-              </button>
-              <button
-                onClick={startConversation}
-                disabled={!userName.trim()}
-                className="px-3 py-1 rounded bg-blue-600 text-white"
-              >
-                Start
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
